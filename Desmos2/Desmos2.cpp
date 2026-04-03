@@ -190,7 +190,6 @@ int main() {
     glfwSwapInterval(1);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
-    // Устанавливаем обработчики
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, cursorPosCallback);
     glfwSetScrollCallback(window, scrollCallback);
@@ -225,16 +224,13 @@ int main() {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    // Создаем графики
     Graph2D graph1, graph2;
     graph1.generatePoints(func1, -10.0f, 10.0f, 500);
     graph2.generatePoints(func2, -10.0f, 10.0f, 500);
 
-    // Цвета для графиков
     glm::vec3 color1(1.0f, 0.5f, 0.0f);
     glm::vec3 color2(0.0f, 0.8f, 1.0f);
 
-    // Переменные UI
     bool showDemo = false;
     char funcInput1[64] = "sin(x)";
     char funcInput2[64] = "cos(x)*2";
