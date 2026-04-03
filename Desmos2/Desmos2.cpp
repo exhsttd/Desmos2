@@ -9,6 +9,8 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <fstream>     
+#include <string>
 
 struct Graph2D {
     unsigned int VAO, VBO;
@@ -65,49 +67,30 @@ public:
     unsigned int ID;
 
     Shader(const char* vertexPath, const char* fragmentPath) {
-        FILE* vFile = fopen(vertexPath, "rb");
-        FILE* fFile = fopen(fragmentPath, "rb");
+        std::string vertexCode = readFile(vertexPath);
+        std::string fragmentCode = readFile(fragmentPath);
 
-        if (!vFile || !fFile) {
-            std::cout << "Failed to open shader files!" << std::endl;
+        if (vertexCode.empty() || fragmentCode.empty()) {
+            std::cout << "ERROR: Failed to read shader files!" << std::endl;
+            ID = 0;
             return;
         }
 
-        fseek(vFile, 0, SEEK_END);
-        long vSize = ftell(vFile);
-        rewind(vFile);
+        unsigned int vertex = compileShader(vertexCode.c_str(), GL_VERTEX_SHADER, "VERTEX");
+        unsigned int fragment = compileShader(fragmentCode.c_str(), GL_FRAGMENT_SHADER, "FRAGMENT");
 
-        fseek(fFile, 0, SEEK_END);
-        long fSize = ftell(fFile);
-        rewind(fFile);
-
-        char* vSource = new char[vSize + 1];
-        char* fSource = new char[fSize + 1];
-
-        fread(vSource, 1, vSize, vFile);
-        fread(fSource, 1, fSize, fFile);
-
-        vSource[vSize] = 0;
-        fSource[fSize] = 0;
-
-        fclose(vFile);
-        fclose(fFile);
-
-        unsigned int vertex = glCreateShader(GL_VERTEX_SHADER);
-        glShaderSource(vertex, 1, &vSource, NULL);
-        glCompileShader(vertex);
-
-        unsigned int fragment = glCreateShader(GL_FRAGMENT_SHADER);
-        glShaderSource(fragment, 1, &fSource, NULL);
-        glCompileShader(fragment);
+        if (vertex == 0 || fragment == 0) {
+            ID = 0;
+            return;
+        }
 
         ID = glCreateProgram();
         glAttachShader(ID, vertex);
         glAttachShader(ID, fragment);
         glLinkProgram(ID);
 
-        delete[] vSource;
-        delete[] fSource;
+        checkCompileErrors(ID, "PROGRAM");
+
         glDeleteShader(vertex);
         glDeleteShader(fragment);
     }
@@ -122,6 +105,57 @@ public:
 
     void setVec3(const char* name, const glm::vec3& vec) {
         glUniform3fv(glGetUniformLocation(ID, name), 1, glm::value_ptr(vec));
+    }
+
+private:
+    std::string readFile(const char* filepath) {
+        std::ifstream file(filepath, std::ios::in | std::ios::binary);
+        if (!file) {
+            std::cout << "ERROR: Could not open file: " << filepath << std::endl;
+            return "";
+        }
+
+        std::string content((std::istreambuf_iterator<char>(file)),
+            std::istreambuf_iterator<char>());
+        return content;
+    }
+
+    unsigned int compileShader(const char* source, GLenum type, const std::string& typeName) {
+        unsigned int shader = glCreateShader(type);
+        glShaderSource(shader, 1, &source, NULL);
+        glCompileShader(shader);
+
+        checkCompileErrors(shader, typeName);
+
+        GLint success;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+        if (!success) {
+            return 0;  
+        }
+
+        return shader;
+    }
+
+    void checkCompileErrors(unsigned int shader, const std::string& type) {
+        GLint success;
+        char infoLog[1024];
+
+        if (type != "PROGRAM") {
+            glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+            if (!success) {
+                glGetShaderInfoLog(shader, 1024, NULL, infoLog);
+                std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n"
+                    << infoLog << "\n" << std::endl;
+            }
+        }
+        else {
+            glGetProgramiv(shader, GL_LINK_STATUS, &success);
+            if (!success) {
+                glGetProgramInfoLog(shader, 1024, NULL, infoLog);
+                std::cout << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n"
+                    << infoLog << "\n" << std::endl;
+            }
+        }
     }
 };
 
@@ -190,7 +224,6 @@ int main() {
     glfwSwapInterval(1);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
-    // Устанавливаем обработчики
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, cursorPosCallback);
     glfwSetScrollCallback(window, scrollCallback);
@@ -203,7 +236,7 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    Shader shader("./shaders/simple.vert", "./shaders/simple.frag");
+    Shader shader("shaders/simple.vert", "shaders/simple.frag");
 
 
     unsigned int gridVAO, gridVBO;
@@ -225,16 +258,13 @@ int main() {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    // Создаем графики
     Graph2D graph1, graph2;
     graph1.generatePoints(func1, -10.0f, 10.0f, 500);
     graph2.generatePoints(func2, -10.0f, 10.0f, 500);
 
-    // Цвета для графиков
     glm::vec3 color1(1.0f, 0.5f, 0.0f);
     glm::vec3 color2(0.0f, 0.8f, 1.0f);
 
-    // Переменные UI
     bool showDemo = false;
     char funcInput1[64] = "sin(x)";
     char funcInput2[64] = "cos(x)*2";
@@ -246,24 +276,27 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Graph Controls");
+        ImGui::Begin("Graph Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
         ImGui::Text("Camera Controls:");
-        ImGui::Text("  Drag mouse - pan");
-        ImGui::Text("  Scroll - zoom");
+        ImGui::Text("Drag mouse - pan");
+        ImGui::Text("Scroll - zoom");
         ImGui::Separator();
 
-        ImGui::Text("Camera Position: (%.2f, %.2f)", offsetX, offsetY);
+        ImGui::Text("Position: (%.2f, %.2f)", offsetX, offsetY);
         ImGui::Text("Scale: %.2f", scale);
+
         ImGui::Separator();
 
-        ImGui::Text("Graph 1:");
+    
+        ImGui::Text("Graph 1");
         ImGui::ColorEdit3("Color 1", glm::value_ptr(color1));
         ImGui::InputText("Function 1", funcInput1, IM_ARRAYSIZE(funcInput1));
-        if (ImGui::Button("Update Graph 1")) {
+        if (ImGui::Button("Update Graph 1", ImVec2(-1, 0))) {
+            // сюда позже добавим парсер
             if (strcmp(funcInput1, "sin(x)") == 0)
                 graph1.generatePoints(func1, -10.0f, 10.0f, 500);
-            else if (strcmp(funcInput1, "x^2/5") == 0)
+            else if (strcmp(funcInput1, "x^2/5") == 0 || strcmp(funcInput1, "x*x*0.2") == 0)
                 graph1.generatePoints(func3, -10.0f, 10.0f, 500);
         }
 
@@ -272,19 +305,19 @@ int main() {
         ImGui::Text("Graph 2:");
         ImGui::ColorEdit3("Color 2", glm::value_ptr(color2));
         ImGui::InputText("Function 2", funcInput2, IM_ARRAYSIZE(funcInput2));
-        if (ImGui::Button("Update Graph 2")) {
+        if (ImGui::Button("Update Graph 2", ImVec2(-1, 0))) {
             if (strcmp(funcInput2, "cos(x)*2") == 0)
                 graph2.generatePoints(func2, -10.0f, 10.0f, 500);
         }
 
         ImGui::Separator();
 
-        if (ImGui::Button("Reset View")) {
+        if (ImGui::Button("Reset View", ImVec2(-1, 0))) {
             offsetX = offsetY = 0.0f;
             scale = 1.0f;
         }
 
-        ImGui::Checkbox("Show Demo", &showDemo);
+        ImGui::Checkbox("Show Demo Window", &showDemo);
         ImGui::Text("FPS: %.1f", io.Framerate);
 
         ImGui::End();
@@ -316,13 +349,80 @@ int main() {
 
         shader.setVec3("color", color1);
         graph1.render();
-
         shader.setVec3("color", color2);
         graph2.render();
 
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2((float)1280, (float)720));
+
+        ImGui::Begin("Graph Overlay", nullptr,
+            ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoBackground |
+            ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+
+
+        float left = -10.0f * scale + offsetX;
+        float right = 10.0f * scale + offsetX;
+        float bottom = -7.2f * scale + offsetY;
+        float top = 7.2f * scale + offsetY;
+
+        ImVec2 winPos = ImGui::GetWindowPos();
+        ImVec2 winSize = ImGui::GetWindowSize();
+
+        auto worldToScreen = [&](float x, float y) -> ImVec2 {
+            float nx = (x - left) / (right - left);
+            float ny = (y - bottom) / (top - bottom);
+            return ImVec2(
+                winPos.x + nx * winSize.x,
+                winPos.y + (1.0f - ny) * winSize.y
+            );
+            };
+
+        float stepX = powf(10.0f, floorf(log10f(right - left) - 0.5f));
+        if (stepX < 0.1f) stepX = 0.1f;
+
+        for (float x = ceilf(left / stepX) * stepX; x <= right; x += stepX) {
+            if (fabs(x) < 0.001f) continue;
+
+            ImVec2 pos = worldToScreen(x, 0.0f);
+            char label[32];
+            sprintf_s(label, "%.1f", x);
+
+            draw->AddText(ImVec2(pos.x - 12, pos.y + 10),
+                IM_COL32(220, 220, 220, 255), label);
+        }
+
+        float stepY = powf(10.0f, floorf(log10f(top - bottom) - 0.5f));
+        if (stepY < 0.1f) stepY = 0.1f;
+
+        for (float y = ceilf(bottom / stepY) * stepY; y <= top; y += stepY) {
+            if (fabs(y) < 0.001f) continue;
+
+            ImVec2 pos = worldToScreen(0.0f, y);
+            char label[32];
+            sprintf_s(label, "%.1f", y);
+
+            draw->AddText(ImVec2(pos.x - 28, pos.y - 8),
+                IM_COL32(220, 220, 220, 255), label);
+        }
+
+        ImVec2 xPos = worldToScreen(right * 0.92f, bottom * 0.1f);
+        draw->AddText(ImVec2(xPos.x + 15, xPos.y + 15),
+            IM_COL32(230, 230, 230, 255), "X");
+
+        ImVec2 yPos = worldToScreen(left * 0.05f, top * 0.85f);
+        draw->AddText(ImVec2(yPos.x - 25, yPos.y - 25),
+            IM_COL32(230, 230, 230, 255), "Y");
+
+        ImGui::End();
+
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
         glfwSwapBuffers(window);
     }
 
