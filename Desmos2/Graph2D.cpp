@@ -10,7 +10,7 @@ Graph2D::~Graph2D() {
     glDeleteBuffers(1, &VBO);
 }
 
-void Graph2D::generatePoints(float (*func)(float), float xMin, float xMax, int points) {
+void Graph2D::generatePoints(const std::function<float(float)>& func, float xMin, float xMax, int points) {
     numPoints = points;
     vertices.clear();
 
@@ -18,7 +18,8 @@ void Graph2D::generatePoints(float (*func)(float), float xMin, float xMax, int p
 
     for (int i = 0; i < points; i++) {
         float x = xMin + i * step;
-        float y = func(x);
+        float y = func(x);  // Вызываем функцию (лямбду, указатель, что угодно)
+
         vertices.push_back(x);
         vertices.push_back(y);
     }

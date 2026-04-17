@@ -14,17 +14,39 @@
 #include "Camera.h"
 
 
-float func1(float x) {
-    return sin(x);
-}
+class ExprTkEvaluator {
+private:
+    typedef double T;
+    exprtk::symbol_table<T> symbol_table;
+    exprtk::expression<T> expression;
+    exprtk::parser<T> parser;
+    T x;
+    bool isCompiled = false; 
 
-float func2(float x) {
-    return cos(x) * 2.0f;
-}
+public:
+    ExprTkEvaluator() : x(0.0) {
+        symbol_table.add_variable("x", x);
+        expression.register_symbol_table(symbol_table);
+    }
 
-float func3(float x) {
-    return x * x * 0.2f;
-}
+    bool compile(const std::string& expr_str) {
+        isCompiled = parser.compile(expr_str, expression);
+        return isCompiled;
+    }
+
+    T evaluate(double x_val) {
+        x = x_val;
+        return expression.value();
+    }
+
+    std::string getError() const {
+        return parser.error();
+    }
+
+    bool isValid() const {
+        return isCompiled;
+    }
+};
 
 Camera camera;
 
@@ -59,15 +81,43 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
     if (camera.scale > 10.0f) camera.scale = 10.0f;
 }
 
+void updateGraphFromExpression(Graph2D& graph, const std::string& expression,
+    float xMin, float xMax, int points,
+    bool& showErrorPopup, std::string& errorMessage) {
+    ExprTkEvaluator evaluator;
+
+    if (evaluator.compile(expression)) {
+        graph.generatePoints([expression](float x) -> float {
+            ExprTkEvaluator eval;
+            if (eval.compile(expression)) {
+                double result = eval.evaluate(x);
+                if (std::isinf(result) || std::isnan(result)) {
+                    return 0.0f;
+                }
+                return (float)result;
+            }
+            return 0.0f;
+            }, xMin, xMax, points);
+
+        std::cout << "Graph updated successfully: " << expression << std::endl;
+        showErrorPopup = false;
+    }
+    else {
+        errorMessage = evaluator.getError();
+        showErrorPopup = true;
+        std::cout <<  "Parse error : " << errorMessage << std::endl;
+    }
+}
+
+
+
 
 int main() {
-    
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    
     GLFWwindow* window = glfwCreateWindow(1280, 720, "2D Graph Calculator", NULL, NULL);
     if (!window) {
         std::cout << "Failed to create window" << std::endl;
@@ -79,12 +129,10 @@ int main() {
     glfwSwapInterval(1);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
-    
     glfwSetMouseButtonCallback(window, mouseButtonCallback);
     glfwSetCursorPosCallback(window, cursorPosCallback);
     glfwSetScrollCallback(window, scrollCallback);
 
-    
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -93,55 +141,52 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    
     Shader shader("shaders/simple.vert", "shaders/simple.frag");
 
-    
     unsigned int gridVAO, gridVBO;
     glGenVertexArrays(1, &gridVAO);
     glGenBuffers(1, &gridVBO);
 
     float gridVertices[] = {
-        -100.0f, 0.0f, 0.0f,
-        100.0f, 0.0f, 0.0f,
-        0.0f, -100.0f, 0.0f,
-        0.0f, 100.0f, 0.0f
+        -100.0f, 0.0f,   
+        100.0f, 0.0f,
+        0.0f, -100.0f,   
+        0.0f, 100.0f
     };
 
     glBindVertexArray(gridVAO);
     glBindBuffer(GL_ARRAY_BUFFER, gridVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(gridVertices), gridVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    
     Graph2D graph1, graph2;
-    graph1.generatePoints(func1, -10.0f, 10.0f, 500);
-    graph2.generatePoints(func2, -10.0f, 10.0f, 500);
+    graph1.generatePoints([](float x) { return sin(x); }, -10.0f, 10.0f, 500);
+    graph2.generatePoints([](float x) { return cos(x) * 2.0f; }, -10.0f, 10.0f, 500);
 
-    
     glm::vec3 color1(1.0f, 0.5f, 0.0f); 
-    glm::vec3 color2(0.0f, 0.8f, 1.0f);  
+    glm::vec3 color2(0.0f, 0.8f, 1.0f); 
 
-    
     bool showDemo = false;
-    char funcInput1[64] = "sin(x)";
-    char funcInput2[64] = "cos(x)*2";
+    char funcInput1[256] = "sin(x)";
+    char funcInput2[256] = "cos(x)*2";
 
-    
+    bool showErrorPopup1 = false;
+    bool showErrorPopup2 = false;
+    std::string errorMessage1;
+    std::string errorMessage2;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
         ImGui::Begin("Graph Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
         ImGui::Text("Camera Controls:");
-        ImGui::Text("  Drag mouse - pan");
-        ImGui::Text("  Scroll - zoom");
         ImGui::Separator();
 
         ImGui::Text("Position: (%.2f, %.2f)", camera.offsetX, camera.offsetY);
@@ -151,11 +196,11 @@ int main() {
         ImGui::Text("Graph 1");
         ImGui::ColorEdit3("Color 1", glm::value_ptr(color1));
         ImGui::InputText("Function 1", funcInput1, IM_ARRAYSIZE(funcInput1));
+
         if (ImGui::Button("Update Graph 1", ImVec2(-1, 0))) {
-            if (strcmp(funcInput1, "sin(x)") == 0)
-                graph1.generatePoints(func1, -10.0f, 10.0f, 500);
-            else if (strcmp(funcInput1, "x^2/5") == 0 || strcmp(funcInput1, "x*x*0.2") == 0)
-                graph1.generatePoints(func3, -10.0f, 10.0f, 500);
+            std::string expr(funcInput1);
+            updateGraphFromExpression(graph1, expr, -10.0f, 10.0f, 500,
+                showErrorPopup1, errorMessage1);
         }
 
         ImGui::Separator();
@@ -163,9 +208,11 @@ int main() {
         ImGui::Text("Graph 2:");
         ImGui::ColorEdit3("Color 2", glm::value_ptr(color2));
         ImGui::InputText("Function 2", funcInput2, IM_ARRAYSIZE(funcInput2));
+
         if (ImGui::Button("Update Graph 2", ImVec2(-1, 0))) {
-            if (strcmp(funcInput2, "cos(x)*2") == 0)
-                graph2.generatePoints(func2, -10.0f, 10.0f, 500);
+            std::string expr(funcInput2);
+            updateGraphFromExpression(graph2, expr, -10.0f, 10.0f, 500,
+                showErrorPopup2, errorMessage2);
         }
 
         ImGui::Separator();
@@ -174,10 +221,41 @@ int main() {
             camera.reset();
         }
 
-        ImGui::Checkbox("Show Demo Window", &showDemo);
         ImGui::Text("FPS: %.1f", io.Framerate);
 
         ImGui::End();
+
+        if (showErrorPopup1) {
+            ImGui::OpenPopup("Error in Graph 1");
+        }
+
+        if (ImGui::BeginPopupModal("Error in Graph 1", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Failed to parse expression:");
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", errorMessage1.c_str());
+            ImGui::Separator();
+            ImGui::Text("Valid example: sin(x), cos(x)*2, x^2, sin(x)*cos(x)");
+            if (ImGui::Button("OK", ImVec2(120, 0))) {
+                showErrorPopup1 = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        if (showErrorPopup2) {
+            ImGui::OpenPopup("Error in Graph 2");
+        }
+
+        if (ImGui::BeginPopupModal("Error in Graph 2", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Failed to parse expression:");
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", errorMessage2.c_str());
+            ImGui::Separator();
+            ImGui::Text("Valid example: sin(x), cos(x)*2, x^2, sin(x)*cos(x)");
+            if (ImGui::Button("OK", ImVec2(120, 0))) {
+                showErrorPopup2 = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
 
         if (showDemo)
             ImGui::ShowDemoWindow(&showDemo);
@@ -193,6 +271,7 @@ int main() {
             -7.2f * camera.scale, 7.2f * camera.scale,
             -1.0f, 1.0f
         );
+
 
         shader.use();
         shader.setMat4("view", view);
@@ -244,37 +323,32 @@ int main() {
         if (stepX < 0.1f) stepX = 0.1f;
 
         for (float x = ceilf(left / stepX) * stepX; x <= right; x += stepX) {
-            if (fabs(x) < 0.001f) continue;  
-
+            if (fabs(x) < 0.001f) continue;
             ImVec2 pos = worldToScreen(x, 0.0f);
             char label[32];
             sprintf_s(label, "%.1f", x);
-
-            draw->AddText(ImVec2(pos.x - 12, pos.y + 10),
-                IM_COL32(220, 220, 220, 255), label);
+            draw->AddText(ImVec2(pos.x - 12, pos.y + 10), IM_COL32(220, 220, 220, 255), label);
         }
 
         float stepY = powf(10.0f, floorf(log10f(top - bottom) - 0.5f));
         if (stepY < 0.1f) stepY = 0.1f;
 
         for (float y = ceilf(bottom / stepY) * stepY; y <= top; y += stepY) {
-            if (fabs(y) < 0.001f) continue;  
-
+            if (fabs(y) < 0.001f) continue;
             ImVec2 pos = worldToScreen(0.0f, y);
             char label[32];
             sprintf_s(label, "%.1f", y);
-
-            draw->AddText(ImVec2(pos.x - 28, pos.y - 8),
-                IM_COL32(220, 220, 220, 255), label);
+            draw->AddText(ImVec2(pos.x - 28, pos.y - 8), IM_COL32(220, 220, 220, 255), label);
         }
+
         ImVec2 xPos = worldToScreen(right * 0.92f, bottom * 0.1f);
-        draw->AddText(ImVec2(xPos.x + 15, xPos.y + 15),
-            IM_COL32(230, 230, 230, 255), "X");
+        draw->AddText(ImVec2(xPos.x + 15, xPos.y + 15), IM_COL32(230, 230, 230, 255), "X");
 
         ImVec2 yPos = worldToScreen(left * 0.05f, top * 0.85f);
-        draw->AddText(ImVec2(yPos.x - 25, yPos.y - 25),
-            IM_COL32(230, 230, 230, 255), "Y");
+        draw->AddText(ImVec2(yPos.x - 25, yPos.y - 25), IM_COL32(230, 230, 230, 255), "Y");
+
         ImGui::End();
+
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
