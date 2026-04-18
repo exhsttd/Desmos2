@@ -58,5 +58,8 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="dependencies\libs\exprtk.hpp" />
+    <ClInclude Include="ExprTkEvaluator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
