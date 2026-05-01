@@ -45,6 +45,10 @@ void Shader::setVec3(const char* name, const glm::vec3& vec) {
     glUniform3fv(glGetUniformLocation(ID, name), 1, glm::value_ptr(vec));
 }
 
+void Shader::setFloat(const std::string& name, float value) const {
+    glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
+}
+
 std::string Shader::readFile(const char* filepath) {
     std::ifstream file(filepath, std::ios::in | std::ios::binary);
     if (!file) {

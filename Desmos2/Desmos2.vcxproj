@@ -156,6 +156,7 @@
     <ClCompile Include="Desmos2.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="Graph2D.cpp" />
+    <ClCompile Include="Inequality.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="src\imgui\imgui.cpp" />
     <ClCompile Include="src\imgui\imgui_demo.cpp" />
@@ -170,6 +171,7 @@
     <ClInclude Include="dependencies\libs\exprtk.hpp" />
     <ClInclude Include="ExprTkEvaluator.h" />
     <ClInclude Include="Graph2D.h" />
+    <ClInclude Include="Inequality.h" />
     <ClInclude Include="Shader.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
