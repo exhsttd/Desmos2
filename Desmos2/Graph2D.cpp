@@ -11,18 +11,31 @@ Graph2D::~Graph2D() {
 }
 
 void Graph2D::generatePoints(const std::function<float(float)>& func, float xMin, float xMax, int points) {
-    numPoints = points;
-    vertices.clear();
+    std::vector<float> newVertices = generatePointsInMemory(func, xMin, xMax, points);
+    uploadToGPU(newVertices);
+}
+
+std::vector<float> Graph2D::generatePointsInMemory(const std::function<float(float)>& func,
+    float xMin, float xMax, int points) {
+    std::vector<float> newVertices;
+    newVertices.reserve(points * 2);  
 
     float step = (xMax - xMin) / (points - 1);
 
     for (int i = 0; i < points; i++) {
         float x = xMin + i * step;
-        float y = func(x);  // Вызываем функцию (лямбду, указатель, что угодно)
+        float y = func(x);
 
-        vertices.push_back(x);
-        vertices.push_back(y);
+        newVertices.push_back(x);
+        newVertices.push_back(y);
     }
+
+    return newVertices;
+}
+
+void Graph2D::uploadToGPU(const std::vector<float>& newVertices) {
+    numPoints = (int)(newVertices.size() / 2);
+    vertices = newVertices;
 
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);

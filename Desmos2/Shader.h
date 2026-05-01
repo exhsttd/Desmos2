@@ -11,6 +11,7 @@ public:
     void use();
     void setMat4(const char* name, const glm::mat4& mat);
     void setVec3(const char* name, const glm::vec3& vec);
+    void setFloat(const std::string& name, float value) const;
 
 private:
     std::string readFile(const char* filepath);
