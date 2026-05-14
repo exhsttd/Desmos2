@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "dependencies\libs\exprtk.hpp"
+#include "exprtk.hpp"
 class ExprTkEvaluator {
 private:
     typedef double T;

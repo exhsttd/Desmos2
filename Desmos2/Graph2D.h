@@ -1,5 +1,3 @@
-#ifndef GRAPH2D_H
-#define GRAPH2D_H
 
 #include <glad/glad.h>
 #include <vector>
@@ -23,5 +21,3 @@ private:
     int numPoints;
     std::vector<float> vertices;
 };
-
-#endif
