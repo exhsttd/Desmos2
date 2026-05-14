@@ -20,6 +20,9 @@
 
 Camera camera;
 
+int windowWidth = 1280;
+int windowHeight = 720;
+
 struct PendingUpdate {
     std::future<std::vector<float>> future;
     std::string expression;
@@ -34,6 +37,12 @@ InequalityRenderer inequalityRenderer;
 char inequalityInput[256] = "x > 1";
 glm::vec3 inequalityColor(0.2f, 0.8f, 0.2f);
 
+void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
+    windowWidth = width;
+    windowHeight = height;
+    glViewport(0, 0, width, height);  
+    std::cout << "Window resized to: " << width << " x " << height << std::endl;
+}
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
@@ -163,7 +172,7 @@ int main() {
         glfwTerminate();
         return -1;
     }
-
+    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
@@ -176,7 +185,7 @@ int main() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
@@ -396,16 +405,21 @@ int main() {
         if (showDemo)
             ImGui::ShowDemoWindow(&showDemo);
 
-        //отрисовка
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+         //отрисовка
+        glClearColor(0.95f, 0.95f, 0.95f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         glm::mat4 view = glm::mat4(1.0f);
         view = glm::translate(view, glm::vec3(-camera.offsetX, -camera.offsetY, 0.0f));
 
+        float aspectRatio = (float)windowWidth / (float)windowHeight;
+
+        float baseHeight = 7.2f * camera.scale;
+        float baseWidth = baseHeight * aspectRatio;
+
         glm::mat4 projection = glm::ortho(
-            -10.0f * camera.scale, 10.0f * camera.scale,
-            -7.2f * camera.scale, 7.2f * camera.scale,
+            -baseWidth, baseWidth,      
+            -baseHeight, baseHeight,    
             -1.0f, 1.0f
         );
 
@@ -427,15 +441,15 @@ int main() {
 
         // Отрисовка неравенств
         inequalityRenderer.render(shader,
-            -10.0f * camera.scale + camera.offsetX,
-            10.0f * camera.scale + camera.offsetX,
-            -7.2f * camera.scale + camera.offsetY,
-            7.2f * camera.scale + camera.offsetY
+            -baseWidth + camera.offsetX,
+            baseWidth + camera.offsetX,
+            -baseHeight + camera.offsetY,
+            baseHeight + camera.offsetY
         );
 
         // Graph Overlay
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2((float)1280, (float)720));
+        ImGui::SetNextWindowSize(ImVec2((float)windowWidth, (float)windowHeight));
 
         ImGui::Begin("Graph Overlay", nullptr,
             ImGuiWindowFlags_NoTitleBar |
@@ -447,10 +461,14 @@ int main() {
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        float left = -10.0f * camera.scale + camera.offsetX;
-        float right = 10.0f * camera.scale + camera.offsetX;
-        float bottom = -7.2f * camera.scale + camera.offsetY;
-        float top = 7.2f * camera.scale + camera.offsetY;
+        aspectRatio = (float)windowWidth / (float)windowHeight;
+        baseHeight = 7.2f * camera.scale;
+        baseWidth = baseHeight * aspectRatio;
+
+        float left = -baseWidth + camera.offsetX;
+        float right = baseWidth + camera.offsetX;
+        float bottom = -baseHeight + camera.offsetY;
+        float top = baseHeight + camera.offsetY;
 
         ImVec2 winPos = ImGui::GetWindowPos();
         ImVec2 winSize = ImGui::GetWindowSize();
@@ -464,33 +482,49 @@ int main() {
             );
             };
 
-        float stepX = powf(10.0f, floorf(log10f(right - left) - 0.5f));
+        float rangeX = right - left;
+        float stepX = powf(10.0f, floorf(log10f(rangeX) - 0.5f));
         if (stepX < 0.1f) stepX = 0.1f;
 
-        for (float x = ceilf(left / stepX) * stepX; x <= right; x += stepX) {
-            if (fabs(x) < 0.001f) continue;
+        float startX = ceilf(left / stepX) * stepX;
+        if (fabs(startX) < 0.001f) startX = stepX; 
+
+        for (float x = startX; x <= right; x += stepX) {
+            if (fabs(x) < 0.001f) continue;  
+
             ImVec2 pos = worldToScreen(x, 0.0f);
-            char label[32];
-            sprintf_s(label, "%.1f", x);
-            draw->AddText(ImVec2(pos.x - 12, pos.y + 10), IM_COL32(220, 220, 220, 255), label);
+
+            if (pos.x >= winPos.x && pos.x <= winPos.x + winSize.x) {
+                char label[32];
+                sprintf_s(label, "%.1f", x);
+                draw->AddText(ImVec2(pos.x - 12, pos.y + 10), IM_COL32(50, 50, 50, 255), label);
+            }
         }
 
-        float stepY = powf(10.0f, floorf(log10f(top - bottom) - 0.5f));
+        float rangeY = top - bottom;
+        float stepY = powf(10.0f, floorf(log10f(rangeY) - 0.5f));
         if (stepY < 0.1f) stepY = 0.1f;
 
-        for (float y = ceilf(bottom / stepY) * stepY; y <= top; y += stepY) {
+        float startY = ceilf(bottom / stepY) * stepY;
+        if (fabs(startY) < 0.001f) startY = stepY;
+
+        for (float y = startY; y <= top; y += stepY) {
             if (fabs(y) < 0.001f) continue;
+
             ImVec2 pos = worldToScreen(0.0f, y);
-            char label[32];
-            sprintf_s(label, "%.1f", y);
-            draw->AddText(ImVec2(pos.x - 28, pos.y - 8), IM_COL32(220, 220, 220, 255), label);
+
+            if (pos.y >= winPos.y && pos.y <= winPos.y + winSize.y) {
+                char label[32];
+                sprintf_s(label, "%.1f", y);
+                draw->AddText(ImVec2(pos.x - 28, pos.y - 8), IM_COL32(50, 50, 50, 255), label);
+            }
         }
 
         ImVec2 xPos = worldToScreen(right * 0.92f, bottom * 0.1f);
-        draw->AddText(ImVec2(xPos.x + 15, xPos.y + 15), IM_COL32(230, 230, 230, 255), "X");
+        draw->AddText(ImVec2(xPos.x + 15, xPos.y + 15), IM_COL32(50, 50, 50, 255), "X");
 
         ImVec2 yPos = worldToScreen(left * 0.05f, top * 0.85f);
-        draw->AddText(ImVec2(yPos.x - 25, yPos.y - 25), IM_COL32(230, 230, 230, 255), "Y");
+        draw->AddText(ImVec2(yPos.x - 25, yPos.y - 25), IM_COL32(50, 50, 50, 255), "Y");
 
         ImGui::End();
 
