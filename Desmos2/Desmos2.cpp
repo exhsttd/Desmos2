@@ -23,6 +23,7 @@ Camera camera;
 int windowWidth = 1280;
 int windowHeight = 720;
 
+// многопоточность
 struct PendingUpdate {
     std::future<std::vector<float>> future;
     std::string expression;
@@ -37,6 +38,7 @@ InequalityRenderer inequalityRenderer;
 char inequalityInput[256] = "x > 1";
 glm::vec3 inequalityColor(0.2f, 0.8f, 0.2f);
 
+//методы для работы мыши framebufferSizeCallback, mouseButtonCallback, cursorPosCallback, scrollCallback
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     windowWidth = width;
     windowHeight = height;
@@ -75,6 +77,7 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
     if (camera.scale > 10.0f) camera.scale = 10.0f;
 }
 
+//генерация точек в фоновом потоке
 std::vector<float> generatePointsInBackground(const std::string& expression,
     float xMin, float xMax, int points,
     bool& outSuccess, std::string& outError) {
@@ -110,6 +113,7 @@ std::vector<float> generatePointsInBackground(const std::string& expression,
     return result;
 }
 
+// метод запусак фонового обновления графика 
 void startBackgroundUpdate(Graph2D& graph, PendingUpdate& pending,
     const std::string& expression,
     float xMin, float xMax, int points) {
@@ -130,6 +134,7 @@ void startBackgroundUpdate(Graph2D& graph, PendingUpdate& pending,
         });
 }
 
+//проверка завершения фоновой задачи
 void processPendingUpdate(Graph2D& graph, PendingUpdate& pending,
     bool& showErrorPopup, std::string& errorMessage) {
     if (!pending.hasPending) return;
@@ -160,6 +165,7 @@ void processPendingUpdate(Graph2D& graph, PendingUpdate& pending,
     }
 }
 
+//мейн
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -234,6 +240,7 @@ int main() {
 
         glfwPollEvents();
 
+        //рассчитывается видимый диапазон (!отчет 6)
         aspectRatio = (float)windowWidth / (float)windowHeight;
         baseHeight = 9.0f * camera.scale;
         baseWidth = baseHeight * aspectRatio;
@@ -244,6 +251,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        //интерфейс Graph Controls
         ImGui::SetNextWindowSize(ImVec2(350, 0), ImGuiCond_FirstUseEver);
         ImGui::Begin("Graph Controls", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -373,10 +381,9 @@ int main() {
         }
 
         ImGui::Separator();
-
-        ImGui::Text("FPS: %.1f", io.Framerate);
         ImGui::End();
 
+        //обработчики окон с ошибками
         if (showErrorPopup1) {
             ImGui::OpenPopup("Error in Graph 1");
         }
@@ -412,7 +419,7 @@ int main() {
         if (showDemo)
             ImGui::ShowDemoWindow(&showDemo);
 
-        // отрисовка
+        // отрисовка openGL
         glClearColor(0.95f, 0.95f, 0.95f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -449,7 +456,7 @@ int main() {
             baseHeight + camera.offsetY
         );
 
-        // Graph Overlay
+        // Graph Overlay (разметка осей, осечек и т.д.)
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2((float)windowWidth, (float)windowHeight));
 
@@ -463,7 +470,6 @@ int main() {
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        // Для разметки осей используем отдельные переменные (не перезаписываем baseHeight для графиков)
         float overlayBaseHeight = 7.2f * camera.scale;
         float overlayBaseWidth = overlayBaseHeight * aspectRatio;
 
