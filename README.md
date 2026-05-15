@@ -7,7 +7,6 @@ cd Desmos2/Desmos2
 # 3. Собрать
 mkdir build
 cd build
-cmake .. -DDOXYGEN_FOUND:BOOL=OFF
 cmake --build . --config Release
 
 # 4. Запустить
