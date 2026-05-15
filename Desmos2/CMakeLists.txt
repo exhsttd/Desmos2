@@ -75,5 +75,3 @@ target_link_libraries(${PROJECT_NAME}
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} opengl32)
 endif()
-
-message(STATUS "Project ready - libraries will be downloaded automatically!")

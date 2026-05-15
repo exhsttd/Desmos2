@@ -560,10 +560,7 @@ int main() {
             }
         }
         inequalityRenderer.clearGUI();
-
-
         ImGui::End();
-
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
