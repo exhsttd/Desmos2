@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 project(Desmos2)
-set(DOXYGEN_FOUND FALSE)
-set(DOXYGEN_EXECUTABLE "NOTFOUND")
+
 add_compile_options(/bigobj)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
