@@ -1,5 +1,5 @@
 # 1. Склонировать
-git clone https://github.com/ВАШ_ЛОГИН/Desmos2.git
+git clone https://github.com/exhsttd/Desmos2.git
 
 # 2. Собрать через командную строку
 cd Desmos2/Desmos2
