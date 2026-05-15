@@ -40,7 +40,7 @@ glm::vec3 inequalityColor(0.2f, 0.8f, 0.2f);
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     windowWidth = width;
     windowHeight = height;
-    glViewport(0, 0, width, height);  
+    glViewport(0, 0, width, height);
     std::cout << "Window resized to: " << width << " x " << height << std::endl;
 }
 
@@ -211,8 +211,8 @@ int main() {
     glBindVertexArray(0);
 
     Graph2D graph1, graph2;
-    graph1.generatePoints([](float x) { return sin(x); }, -10.0f, 10.0f, 500);
-    graph2.generatePoints([](float x) { return cos(x) * 2.0f; }, -10.0f, 10.0f, 500);
+    graph1.generatePoints([](float x) { return sin(x); }, -100.0f, 100.0f, 2000);
+    graph2.generatePoints([](float x) { return cos(x) * 2.0f; }, -100.0f, 100.0f, 2000);
 
     glm::vec3 color1(1.0f, 0.5f, 0.0f);
     glm::vec3 color2(0.0f, 0.8f, 1.0f);
@@ -226,11 +226,19 @@ int main() {
     std::string errorMessage1;
     std::string errorMessage2;
 
+    float aspectRatio, baseHeight, baseWidth, currentXMin, currentXMax;
+
     while (!glfwWindowShouldClose(window)) {
         processPendingUpdate(graph1, pending1, showErrorPopup1, errorMessage1);
         processPendingUpdate(graph2, pending2, showErrorPopup2, errorMessage2);
 
         glfwPollEvents();
+
+        aspectRatio = (float)windowWidth / (float)windowHeight;
+        baseHeight = 9.0f * camera.scale;
+        baseWidth = baseHeight * aspectRatio;
+        currentXMin = -baseWidth + camera.offsetX;
+        currentXMax = baseWidth + camera.offsetX;
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -252,7 +260,7 @@ int main() {
 
         if (ImGui::Button("Update Graph 1", ImVec2(-1, 0))) {
             std::string expr(funcInput1);
-            startBackgroundUpdate(graph1, pending1, expr, -10.0f, 10.0f, 500);
+            startBackgroundUpdate(graph1, pending1, expr, currentXMin, currentXMax, 500);
         }
 
         if (pending1.hasPending) {
@@ -268,7 +276,7 @@ int main() {
 
         if (ImGui::Button("Update Graph 2", ImVec2(-1, 0))) {
             std::string expr(funcInput2);
-            startBackgroundUpdate(graph2, pending2, expr, -10.0f, 10.0f, 500);
+            startBackgroundUpdate(graph2, pending2, expr, currentXMin, currentXMax, 500);
         }
 
         if (pending2.hasPending) {
@@ -366,7 +374,6 @@ int main() {
 
         ImGui::Separator();
 
-
         ImGui::Text("FPS: %.1f", io.Framerate);
         ImGui::End();
 
@@ -405,21 +412,16 @@ int main() {
         if (showDemo)
             ImGui::ShowDemoWindow(&showDemo);
 
-         //отрисовка
+        // отрисовка
         glClearColor(0.95f, 0.95f, 0.95f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         glm::mat4 view = glm::mat4(1.0f);
         view = glm::translate(view, glm::vec3(-camera.offsetX, -camera.offsetY, 0.0f));
 
-        float aspectRatio = (float)windowWidth / (float)windowHeight;
-
-        float baseHeight = 7.2f * camera.scale;
-        float baseWidth = baseHeight * aspectRatio;
-
         glm::mat4 projection = glm::ortho(
-            -baseWidth, baseWidth,      
-            -baseHeight, baseHeight,    
+            -baseWidth, baseWidth,
+            -baseHeight, baseHeight,
             -1.0f, 1.0f
         );
 
@@ -461,14 +463,14 @@ int main() {
 
         ImDrawList* draw = ImGui::GetWindowDrawList();
 
-        aspectRatio = (float)windowWidth / (float)windowHeight;
-        baseHeight = 7.2f * camera.scale;
-        baseWidth = baseHeight * aspectRatio;
+        // Для разметки осей используем отдельные переменные (не перезаписываем baseHeight для графиков)
+        float overlayBaseHeight = 7.2f * camera.scale;
+        float overlayBaseWidth = overlayBaseHeight * aspectRatio;
 
-        float left = -baseWidth + camera.offsetX;
-        float right = baseWidth + camera.offsetX;
-        float bottom = -baseHeight + camera.offsetY;
-        float top = baseHeight + camera.offsetY;
+        float left = -overlayBaseWidth + camera.offsetX;
+        float right = overlayBaseWidth + camera.offsetX;
+        float bottom = -overlayBaseHeight + camera.offsetY;
+        float top = overlayBaseHeight + camera.offsetY;
 
         ImVec2 winPos = ImGui::GetWindowPos();
         ImVec2 winSize = ImGui::GetWindowSize();
@@ -487,10 +489,10 @@ int main() {
         if (stepX < 0.1f) stepX = 0.1f;
 
         float startX = ceilf(left / stepX) * stepX;
-        if (fabs(startX) < 0.001f) startX = stepX; 
+        if (fabs(startX) < 0.001f) startX = stepX;
 
         for (float x = startX; x <= right; x += stepX) {
-            if (fabs(x) < 0.001f) continue;  
+            if (fabs(x) < 0.001f) continue;
 
             ImVec2 pos = worldToScreen(x, 0.0f);
 
@@ -520,11 +522,45 @@ int main() {
             }
         }
 
+        for (float x = startX; x <= right; x += stepX) {
+            if (fabs(x) < 0.001f) continue;
+            ImVec2 pos = worldToScreen(x, 0.0f);
+            draw->AddLine(ImVec2(pos.x, pos.y - 5), ImVec2(pos.x, pos.y + 5), IM_COL32(100, 100, 100, 255), 1.0f);
+        }
+
+        for (float y = startY; y <= top; y += stepY) {
+            if (fabs(y) < 0.001f) continue;
+            ImVec2 pos = worldToScreen(0.0f, y);
+            draw->AddLine(ImVec2(pos.x - 5, pos.y), ImVec2(pos.x + 5, pos.y), IM_COL32(100, 100, 100, 255), 1.0f);
+        }
+        
+
         ImVec2 xPos = worldToScreen(right * 0.92f, bottom * 0.1f);
         draw->AddText(ImVec2(xPos.x + 15, xPos.y + 15), IM_COL32(50, 50, 50, 255), "X");
 
         ImVec2 yPos = worldToScreen(left * 0.05f, top * 0.85f);
         draw->AddText(ImVec2(yPos.x - 25, yPos.y - 25), IM_COL32(50, 50, 50, 255), "Y");
+
+        for (const auto& line : inequalityRenderer.getGUILines()) {
+            if (line.isX) {
+                draw->AddLine(
+                    ImVec2(line.screenPos, winPos.y),
+                    ImVec2(line.screenPos, winPos.y + winSize.y),
+                    IM_COL32(line.color.r * 255, line.color.g * 255, line.color.b * 255, (int)(line.alpha * 255)),
+                    2.0f
+                );
+            }
+            else {
+                draw->AddLine(
+                    ImVec2(winPos.x, line.screenPos),
+                    ImVec2(winPos.x + winSize.x, line.screenPos),
+                    IM_COL32(line.color.r * 255, line.color.g * 255, line.color.b * 255, (int)(line.alpha * 255)),
+                    2.0f
+                );
+            }
+        }
+        inequalityRenderer.clearGUI();
+
 
         ImGui::End();
 

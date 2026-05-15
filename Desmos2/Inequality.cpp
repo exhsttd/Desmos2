@@ -40,13 +40,14 @@ bool InequalityRenderer::evaluateInequality(const Inequality& ineq, float x, flo
     return ineq.condition(x, y);
 }
 
-void InequalityRenderer::addInequality(const std::string& expr, const glm::vec3& color, float alpha) {
+void InequalityRenderer::addInequality(const std::string& expr, const glm::vec3& color, float alpha, bool isGUI) {
     Inequality ineq;
     ineq.expression = expr;
     ineq.color = color;
     ineq.alpha = alpha;
     ineq.enabled = true;
     ineq.isActive = true;
+    ineq.isGUI = isGUI;
 
     std::string exprTrimmed = expr;
     exprTrimmed.erase(std::remove_if(exprTrimmed.begin(), exprTrimmed.end(), ::isspace), exprTrimmed.end());
@@ -138,7 +139,7 @@ void InequalityRenderer::addInequality(const std::string& expr, const glm::vec3&
     mesh.alpha = alpha;
     meshes.push_back(mesh);
 
-    std::cout << "Added inequality: " << expr << " with alpha: " << alpha << std::endl;
+    std::cout << "Added inequality: " << expr << " with alpha: " << alpha << " isGUI: " << isGUI << std::endl;
 }
 
 void InequalityRenderer::regenerateMesh(int index, float xMin, float xMax, float yMin, float yMax, int resolution) {
@@ -212,6 +213,13 @@ void InequalityRenderer::render(Shader& shader, float xMin, float xMax, float yM
     for (size_t i = 0; i < inequalities.size() && i < meshes.size(); i++) {
         if (!inequalities[i].enabled || !inequalities[i].isActive) continue;
 
+        // GUI-режим: рисуем линии на экране через ImGui
+        if (inequalities[i].isGUI) {
+            // В GUI-режиме не используем OpenGL шейдер, рисуем через ImDrawList
+            // Это будет обрабатываться в main.cpp отдельно
+            continue;
+        }
+
         regenerateMesh((int)i, xMin, xMax, yMin, yMax, resolution);
 
         auto& mesh = meshes[i];
@@ -229,6 +237,110 @@ void InequalityRenderer::render(Shader& shader, float xMin, float xMax, float yM
             glDisable(GL_BLEND);
         }
     }
+}
+
+void InequalityRenderer::renderGUI(float xMin, float xMax, float yMin, float yMax, float windowWidth, float windowHeight) {
+    // Отрисовка GUI-неравенств (линии на экране)
+    for (size_t i = 0; i < inequalities.size(); i++) {
+        if (!inequalities[i].enabled || !inequalities[i].isActive || !inequalities[i].isGUI) continue;
+
+        const auto& ineq = inequalities[i];
+
+        // Парсим выражение для GUI
+        std::string expr = ineq.expression;
+
+        // Убираем пробелы
+        expr.erase(std::remove_if(expr.begin(), expr.end(), ::isspace), expr.end());
+
+        // Определяем оператор и значение
+        std::string op;
+        size_t opPos = std::string::npos;
+
+        if (expr.find(">=") != std::string::npos) {
+            op = ">=";
+            opPos = expr.find(">=");
+        }
+        else if (expr.find("<=") != std::string::npos) {
+            op = "<=";
+            opPos = expr.find("<=");
+        }
+        else if (expr.find(">") != std::string::npos) {
+            op = ">";
+            opPos = expr.find(">");
+        }
+        else if (expr.find("<") != std::string::npos) {
+            op = "<";
+            opPos = expr.find("<");
+        }
+
+        if (opPos == std::string::npos) continue;
+
+        std::string leftExpr = expr.substr(0, opPos);
+        std::string rightExpr = expr.substr(opPos + op.length());
+
+        float value;
+        bool isX = true;
+
+        if (leftExpr == "x" && isValidNumber(rightExpr)) {
+            value = std::stof(rightExpr);
+            isX = true;
+        }
+        else if (leftExpr == "y" && isValidNumber(rightExpr)) {
+            value = std::stof(rightExpr);
+            isX = false;
+        }
+        else if (rightExpr == "x" && isValidNumber(leftExpr)) {
+            value = std::stof(leftExpr);
+            isX = true;
+            if (op == ">") op = "<";
+            else if (op == "<") op = ">";
+            else if (op == ">=") op = "<=";
+            else if (op == "<=") op = ">=";
+        }
+        else if (rightExpr == "y" && isValidNumber(leftExpr)) {
+            value = std::stof(leftExpr);
+            isX = false;
+            if (op == ">") op = "<";
+            else if (op == "<") op = ">";
+            else if (op == ">=") op = "<=";
+            else if (op == "<=") op = ">=";
+        }
+        else {
+            continue;
+        }
+
+        // Преобразуем мировую координату в экранную
+        // Диапазон: x от -baseWidth до baseWidth, y от -baseHeight до baseHeight
+        float screenPos;
+        if (isX) {
+            // Нормализуем x от 0 до 1
+            float t = (value - xMin) / (xMax - xMin);
+            screenPos = t * windowWidth;
+        }
+        else {
+            // Нормализуем y от 0 до 1
+            float t = (value - yMin) / (yMax - yMin);
+            screenPos = (1.0f - t) * windowHeight;
+        }
+
+        // Рисуем линию через ImGui (будет вызвано из main.cpp)
+        // Сохраняем информацию для отрисовки
+        GUILine line;
+        line.isX = isX;
+        line.screenPos = screenPos;
+        line.color = ineq.color;
+        line.alpha = ineq.alpha;
+        line.op = op;
+        guiLines.push_back(line);
+    }
+}
+
+void InequalityRenderer::clearGUI() {
+    guiLines.clear();
+}
+
+std::vector<GUILine>& InequalityRenderer::getGUILines() {
+    return guiLines;
 }
 
 void InequalityRenderer::removeInequality(int index) {
